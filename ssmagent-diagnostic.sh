@@ -40,7 +40,7 @@ echo "
         Note1="N/A"
     else
         Result1="Fail"
-        Note1="Connectivity failed to metadata service"
+        Note1="Connectivity failed to metadata service http://169.254.169.254"
     fi
     printf "$Test1|$Result1|$Note1\n" >> /tmp/ssmscript-output.txt
 
@@ -61,55 +61,89 @@ echo "
     #-------Test3-------
 
     Test3="Testing ec2messages endpoint Connectivity"
-    if nc -w $TIMEOUT -z $ec2end $HTTPSPORT; then
-     Result3="Pass"
-     Note3="N/A"
+    if [ -f /usr/bin/nc ];then
+        nc -w $TIMEOUT -z $ec2end $HTTPSPORT > /dev/null 2>/dev/null
+        exitcode=$?
+        if [ $exitcode -eq 0 ]; then
+         Result3="Pass"
+         Note3="Connected to ec2messages.$Region.amazonaws.com"
+        elif [ $exitcode -eq 1 ]; then
+         Result3="Fail"
+         Note3="Connection was refused or Reset."
+        else
+         Result3="Fail"
+         Note3="Check if DNS is working"         
+        fi
+        printf "$Test3|$Result3|$Note3\n" >> /tmp/ssmscript-output.txt
     else
-     Result3="Fail"
-     Note3="Connectivity failed to ec2messages.$Region.amazonaws.com"
-    fi
-    printf "$Test3|$Result3|$Note3\n" >> /tmp/ssmscript-output.txt
+       Result3="Fail"  
+       Note3="ncat package is missing on the Instance for this test"
+       printf "$Test3|$Result3|$Note3\n" >> /tmp/ssmscript-output.txt
+    fi      
 
     #-------Test4-------
-
     Test4="Testing SSM endpoint Connectivity"
-    if nc -w $TIMEOUT -z $ssmend $HTTPSPORT; then
-     Result4="Pass"
-     Note4="N/A"
+    if [ -f /usr/bin/nc ];then
+        nc -w $TIMEOUT -z $ssmend $HTTPSPORT > /dev/null 2>/dev/null
+        exitcode=$?
+        if [ $exitcode -eq 0 ];then
+         Result4="Pass"
+         Note4="Connected to ssm.$Region.amazonaws.com"
+        elif [ $exitcode -eq 1 ];then
+         Result4="Fail"
+         Note4="Connection was refused or Reset."
+        else
+         Result4="Fail"
+         Note4="Check if DNS is working"         
+        fi
+        printf "$Test4|$Result4|$Note4\n" >> /tmp/ssmscript-output.txt
     else
-     Result4="Fail"
-     Note4="Connectivity failed to ssm.$Region.amazonaws.com"
-    fi
-    printf "$Test4|$Result4|$Note4\n" >> /tmp/ssmscript-output.txt
+       Result4="Fail"  
+       Note4="ncat package is missing on the Instance for this test"
+       printf "$Test4|$Result4|$Note4\n" >> /tmp/ssmscript-output.txt
+    fi 
 
     #-------Test5-------
 
     Test5="Testing ssmmessages endpoint Connectivity"
-    if nc -w $TIMEOUT -z $ssmmessagesend $HTTPSPORT; then
-     Result5="Pass"
-     Note5="N/A"
+    if [ -f /usr/bin/nc ];then
+        nc -w $TIMEOUT -z $ssmmessagesend $HTTPSPORT > /dev/null 2>/dev/null
+        exitcode=$?
+        if [ $exitcode -eq 0 ];then
+         Result5="Pass"
+         Note5="Connected to ssmmessages.$Region.amazonaws.com"
+        elif [ $exitcode -eq 1 ];then
+         Result5="Fail"
+         Note5="Connection was refused or Reset."
+        else
+         Result5="Fail"
+         Note5="Check if DNS is working"         
+        fi
+        printf "$Test5|$Result5|$Note5\n" >> /tmp/ssmscript-output.txt
     else
-     Result5="Fail"
-     Note5="Connectivity failed to ssmmessages.$Region.amazonaws.com"
-    fi
-    printf "$Test5|$Result5|$Note5\n" >> /tmp/ssmscript-output.txt
-
-
+       Result5="Fail"  
+       Note5="ncat package is missing on the Instance for this test"
+       printf "$Test5|$Result5|$Note5\n" >> /tmp/ssmscript-output.txt
+    fi 
     #-------Test6-------
 
     Test6="SSM agent Service Running"
+    SSMAGENTISSUE="https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-manual-agent-install.html"
     if [ -f /usr/bin/yum ] || [ -f /usr/bin/zypper ]; # For Redhat Variants
     then 
      Test6="SSM agent service status"
      rpm -qa | grep amazon-ssm-agent > /dev/null 2>/dev/null
      if [ $? -ne 0 ];then
       Result6="Not Installed"
+      Note6="$SSMAGENTISSUE"
      else
       is_running=$(ps aux | grep -v grep | grep -w amazon-ssm-agent | wc -l | awk '{print $1}')
       if [ $is_running != "0" ]; then
        Result6="Active"
+       Note6="N/A"
       else
-       Result6="Inactive" 
+       Result6="Inactive"
+       Note6="$SSMAGENTISSUE"
       fi      
      fi
     elif [ -f /etc/debian_version ];then #For Ubuntu. Covering both snap and dpkg installation types.
@@ -119,12 +153,15 @@ echo "
       if [ $? -eq 0 ];then
        snap services amazon-ssm-agent.amazon-ssm-agent | grep -w "active" > /dev/null 2>/dev/null
        if [ $? -eq 0 ];then
-        Result6=Active
+        Result6="Active"
+        Note6="N/A"
        else
-        Result6=Inactive
+        Result6="Inactive"
+        Note6="$SSMAGENTISSUE"
        fi 
       else
-       Result6="Not Installed"
+       Result6="Not Installed."
+       Note6="$SSMAGENTISSUE"
       fi
      else
       if [ $(dpkg-query -W -f='${Status}' amazon-ssm-agent 2>/dev/null | grep -c "ok installed") -eq 1 ];
@@ -132,44 +169,49 @@ echo "
        Result6=`systemctl is-active  amazon-ssm-agent`
       else
        Result6="Not Installed"
+       Note6="$SSMAGENTISSUE"
       fi
      fi
     else
      Results6="Unable to determine OS"
+     Note6="$SSMAGENTISSUE"
     fi 
-    Note6=N/A 
     printf "$Test6|$Result6|$Note6\n" >> /tmp/ssmscript-output.txt
 
     #-------Test7-------
-
     Test7="SSM Agent Proxy Settings"
-    sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "http_proxy"
-    if [ $? -eq 0 ];then
-     Results7a=`sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "http_proxy"`
-     Note7=N/A
-    else
-     Results7a="http_proxy=NULL"
-     Note7="There is no Proxy settings for SSM agent"
+    if [[ $Result6 = "Not Installed" ]] || [[ $Result6 = "Unable to determine OS" ]];then
+        Results7="Skipped"
+        Note7="SSM Agent not present. Skipping this test.."
+        printf "$Test7|$Results7|$Note7\n" >> /tmp/ssmscript-output.txt 
+    else    
+        sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "http_proxy"
+        if [ $? -eq 0 ];then
+            Results7a=`sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "http_proxy"`
+            Note7=N/A
+        else
+            Results7a="http_proxy=NULL"
+            Note7="There is no Proxy settings for SSM agent"
+        fi
+        sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "https_proxy"
+        if [ $? -eq 0 ];then
+            Results7b=`sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "https_proxy"`
+            Note7=N/A
+        else
+            Results7b="http_proxys=NULL"
+            Note7="There is no Proxy settings for SSM agent"
+        fi
+        sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "no_proxy"
+        if [ $? -eq 0 ];then
+            Results7c=`sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "no_proxy"`
+        else
+            Results7c="no_proxy=NULL"
+        fi
+        printf "$Test7|$Results7a,$Results7b,$Results7c|$Note7\n" >> /tmp/ssmscript-output.txt
     fi
-    sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "https_proxy"
-    if [ $? -eq 0 ];then
-     Results7b=`sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "https_proxy"`
-     Note7=N/A
-    else
-     Results7b="http_proxys=NULL"
-     Note7="There is no Proxy settings for SSM agent"
-    fi
-    sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "no_proxy"
-    if [ $? -eq 0 ];then
-     Results7c=`sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "no_proxy"`
-    else
-     Results7c="no_proxy=NULL"
-    fi
-    printf "$Test7|$Results7a,$Results7b,$Results7c|$Note7\n" >> /tmp/ssmscript-output.txt
 
 
     #-------Test8-------
-
 
     Test8="System Wide Proxy Settings"
     env | grep -e "http_proxy"
@@ -195,14 +237,20 @@ echo "
      Results8c="no_proxy=NULL"
     fi
     printf "$Test8|$Results8a,$Results8b,$Results8c|$Note8\n" >> /tmp/ssmscript-output.txt
+      
 
 
     #-------Test9------
 
-    Test9="DNS server details"
-    nameservers=($(grep nameserver /etc/resolv.conf | head -n5|cut -d ' ' -f2))
-    Results9=${nameservers[@]}
-    Note9=N/A
+    Test9="Nameservers(DNS) configured on the server"
+    nameservers=($(cat /etc/resolv.conf  | grep -v '^#' | grep nameserver | awk '{print $2}'))
+    if [ ${#nameservers[@]} -eq 0 ]; then
+        Results9="Fail"
+        Note9="No DNS servers found in /etc/resolv.conf"
+    else
+        Results9=${nameservers[@]}
+        Note9=N/A
+    fi    
     printf "$Test9|$Results9|$Note9\n" >> /tmp/ssmscript-output.txt
 
 
