@@ -35,12 +35,17 @@ echo "
 
     Test1="Testing metadata endpoint"
     echo " "
-    if nc -w $TIMEOUT -z $METADATA_URL $HTTPPORT; then
-        Result1="Pass"
-        Note1="N/A"
+	timeout 3 bash -c "cat < /dev/null > /dev/tcp/$METADATA_URL/80"
+	exitcode=$?
+    if [ $exitcode -eq 0 ]; then
+		Result1="Pass"
+        Note1="Connected to http://169.254.169.254"
+    elif [ $exitcode -eq 124 ]; then
+        Result1="Fail"
+        Note1="Couldn't connect to http://169.254.169.254. Check the Security group and NACL configuration."
     else
         Result1="Fail"
-        Note1="Connectivity failed to metadata service http://169.254.169.254"
+        Note1="Check if DNS is working"         
     fi
     printf "$Test1|$Result1|$Note1\n" >> /tmp/ssmscript-output.txt
 
@@ -61,71 +66,55 @@ echo "
     #-------Test3-------
 
     Test3="Testing ec2messages endpoint Connectivity"
-    if [ -f /usr/bin/nc ];then
-        nc -w $TIMEOUT -z $ec2end $HTTPSPORT > /dev/null 2>/dev/null
-        exitcode=$?
-        if [ $exitcode -eq 0 ]; then
-         Result3="Pass"
-         Note3="Connected to ec2messages.$Region.amazonaws.com"
-        elif [ $exitcode -eq 1 ]; then
-         Result3="Fail"
-         Note3="Connection was refused or Reset."
-        else
-         Result3="Fail"
-         Note3="Check if DNS is working"         
-        fi
-        printf "$Test3|$Result3|$Note3\n" >> /tmp/ssmscript-output.txt
+	timeout 3 bash -c "cat < /dev/null > /dev/tcp/$ec2end/443"
+	exitcode=$?
+    if [ $exitcode -eq 0 ]; then
+		Result3="Pass"
+        Note3="Connected to $ec2end."
+    elif [ $exitcode -eq 124 ]; then
+        Result3="Fail"
+        Note3="Couldn't connect to $ec2end. Check the Security group and NACL configuration."
     else
-       Result3="Fail"  
-       Note3="ncat package is missing on the Instance for this test"
-       printf "$Test3|$Result3|$Note3\n" >> /tmp/ssmscript-output.txt
-    fi      
+        Result3="Fail"
+        Note3="Check if DNS is working"         
+    fi
+    printf "$Test3|$Result3|$Note3\n" >> /tmp/ssmscript-output.txt
+    
 
     #-------Test4-------
     Test4="Testing SSM endpoint Connectivity"
-    if [ -f /usr/bin/nc ];then
-        nc -w $TIMEOUT -z $ssmend $HTTPSPORT > /dev/null 2>/dev/null
-        exitcode=$?
-        if [ $exitcode -eq 0 ];then
-         Result4="Pass"
-         Note4="Connected to ssm.$Region.amazonaws.com"
-        elif [ $exitcode -eq 1 ];then
-         Result4="Fail"
-         Note4="Connection was refused or Reset."
-        else
-         Result4="Fail"
-         Note4="Check if DNS is working"         
-        fi
-        printf "$Test4|$Result4|$Note4\n" >> /tmp/ssmscript-output.txt
+	timeout 3 bash -c "cat < /dev/null > /dev/tcp/$ssmend/443"
+	exitcode=$?
+    if [ $exitcode -eq 0 ]; then
+		Result4="Pass"
+        Note4="Connected to $ssmend."
+    elif [ $exitcode -eq 124 ]; then
+        Result4="Fail"
+        Note4="Couldn't connect to $ssmend. Check the Security group and NACL configuration."
     else
-       Result4="Fail"  
-       Note4="ncat package is missing on the Instance for this test"
-       printf "$Test4|$Result4|$Note4\n" >> /tmp/ssmscript-output.txt
-    fi 
+        Result4="Fail"
+        Note4="Check if DNS is working"         
+    fi
+    printf "$Test4|$Result4|$Note4\n" >> /tmp/ssmscript-output.txt
 
     #-------Test5-------
 
     Test5="Testing ssmmessages endpoint Connectivity"
-    if [ -f /usr/bin/nc ];then
-        nc -w $TIMEOUT -z $ssmmessagesend $HTTPSPORT > /dev/null 2>/dev/null
-        exitcode=$?
-        if [ $exitcode -eq 0 ];then
-         Result5="Pass"
-         Note5="Connected to ssmmessages.$Region.amazonaws.com"
-        elif [ $exitcode -eq 1 ];then
-         Result5="Fail"
-         Note5="Connection was refused or Reset."
-        else
-         Result5="Fail"
-         Note5="Check if DNS is working"         
-        fi
-        printf "$Test5|$Result5|$Note5\n" >> /tmp/ssmscript-output.txt
+	timeout 3 bash -c "cat < /dev/null > /dev/tcp/$ssmmessagesend/443"
+	exitcode=$?
+    if [ $exitcode -eq 0 ]; then
+		Result5="Pass"
+        Note5="Connected to $ssmmessagesend."
+    elif [ $exitcode -eq 124 ]; then
+        Result5="Fail"
+        Note5="Couldn't connect to $ssmmessagesend. Check the Security group and NACL configuration."
     else
-       Result5="Fail"  
-       Note5="ncat package is missing on the Instance for this test"
-       printf "$Test5|$Result5|$Note5\n" >> /tmp/ssmscript-output.txt
-    fi 
-    #-------Test6-------
+        Result5="Fail"
+        Note5="Check if DNS is working"         
+    fi
+    printf "$Test5|$Result5|$Note5\n" >> /tmp/ssmscript-output.txt
+    
+	#-------Test6-------
 
     Test6="SSM agent Service Running"
     SSMAGENTISSUE="https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-manual-agent-install.html"
@@ -249,7 +238,7 @@ echo "
         Note9="No DNS servers found in /etc/resolv.conf"
     else
         Results9=${nameservers[@]}
-        Note9=N/A
+        Note9="DNS servers found in /etc/resolv.conf"
     fi    
     printf "$Test9|$Results9|$Note9\n" >> /tmp/ssmscript-output.txt
 
@@ -263,7 +252,7 @@ echo "
      Note10="N/A"
     else
      Results10="Null"
-     Note10="Couldnt resolve"
+     Note10="Couldnt resolve $ssmend. Check if DNS is working."
     fi
     printf "$Test10|$Results10|$Note10\n" >> /tmp/ssmscript-output.txt
     cat /tmp/ssmscript-output.txt  | column -t -s "|"
