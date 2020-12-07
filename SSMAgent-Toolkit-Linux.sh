@@ -27,40 +27,37 @@ echo "
     HTTPPORT=80
     TIMEOUT=1
 
-    printf "Check|Value|Note\n" >> /tmp/ssmscript-output.txt
-    echo "-----|-----|-----" >> /tmp/ssmscript-output.txt
-    echo "   |    |    |" >> /tmp/ssmscript-output.txt
+    printf "Check|Value|Note\n" >> /tmp/ssmtoolkitscript-output.txt
+    echo "-----|-----|-----" >> /tmp/ssmtoolkitscript-output.txt
+    echo "   |    |    |" >> /tmp/ssmtoolkitscript-output.txt
 
     #-------Test1-------
 
     Test1="Testing metadata endpoint"
     echo " "
-	timeout 3 bash -c "cat < /dev/null > /dev/tcp/$METADATA_URL/80"
-	exitcode=$?
-    if [ $exitcode -eq 0 ]; then
-		Result1="Pass"
-        Note1="Connected to http://169.254.169.254"
-    elif [ $exitcode -eq 124 ]; then
+    curl -s --connect-timeout 5 http://169.254.169.254/ > /dev/null
+    exitcode=$?
+    if [ $exitcode -ne 0 ]; then
         Result1="Fail"
-        Note1="Couldn't connect to http://169.254.169.254. Check the Security group and NACL configuration."
+        Note1="Couldn't connect to http://169.254.169.254. Possible issue could be proxy"
     else
-        Result1="Fail"
-        Note1="Check if DNS is working"         
+    	Result1="Pass"
+        Note1="Connected to http://169.254.169.254"    
     fi
-    printf "$Test1|$Result1|$Note1\n" >> /tmp/ssmscript-output.txt
+    printf "$Test1|$Result1|$Note1\n" >> /tmp/ssmtoolkitscript-output.txt
 
 
     #-------Test2-------
 
     Test2="Getting IAM Role Attached"
-    IAM_ROLE=$(curl -s  http://169.254.169.254/latest/meta-data/iam/security-credentials/)
+    IAM_ROLE=$(curl -s --connect-timeout 5 http://169.254.169.254/latest/meta-data/iam/security-credentials/)
     if [[ $IAM_ROLE == *"Not Found"* ]];then
      Result2="Not Found"
     else
      Result2="$IAM_ROLE"
     fi
-    Note2="Require the minimum of policies as of Amazon Managed Policy,AmazonSSMManagedInstanceCore."
-    printf "$Test2|$Result2|$Note2\n"  >> /tmp/ssmscript-output.txt
+    Note2="Ensure the Amazon Managed Policy,AmazonSSMManagedInstanceCore is attached to the Role."
+    printf "$Test2|$Result2|$Note2\n"  >> /tmp/ssmtoolkitscript-output.txt
 
 
     #-------Test3-------
@@ -78,7 +75,7 @@ echo "
         Result3="Fail"
         Note3="Check if DNS is working"         
     fi
-    printf "$Test3|$Result3|$Note3\n" >> /tmp/ssmscript-output.txt
+    printf "$Test3|$Result3|$Note3\n" >> /tmp/ssmtoolkitscript-output.txt
     
 
     #-------Test4-------
@@ -95,7 +92,7 @@ echo "
         Result4="Fail"
         Note4="Check if DNS is working"         
     fi
-    printf "$Test4|$Result4|$Note4\n" >> /tmp/ssmscript-output.txt
+    printf "$Test4|$Result4|$Note4\n" >> /tmp/ssmtoolkitscript-output.txt
 
     #-------Test5-------
 
@@ -112,7 +109,7 @@ echo "
         Result5="Fail"
         Note5="Check if DNS is working"         
     fi
-    printf "$Test5|$Result5|$Note5\n" >> /tmp/ssmscript-output.txt
+    printf "$Test5|$Result5|$Note5\n" >> /tmp/ssmtoolkitscript-output.txt
     
 	#-------Test6-------
 
@@ -165,45 +162,48 @@ echo "
      Results6="Unable to determine OS"
      Note6="$SSMAGENTISSUE"
     fi 
-    printf "$Test6|$Result6|$Note6\n" >> /tmp/ssmscript-output.txt
+    printf "$Test6|$Result6|$Note6\n" >> /tmp/ssmtoolkitscript-output.txt
 
     #-------Test7-------
     Test7="SSM Agent Proxy Settings"
+    Proxy_doc="No Proxy variables found for ssm agent. Refer : https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-proxy-with-ssm-agent.html"
     if [[ $Result6 = "Not Installed" ]] || [[ $Result6 = "Unable to determine OS" ]];then
         Results7="Skipped"
         Note7="SSM Agent not present. Skipping this test.."
-        printf "$Test7|$Results7|$Note7\n" >> /tmp/ssmscript-output.txt 
+        printf "$Test7|$Results7|$Note7\n" >> /tmp/ssmtoolkitscript-output.txt 
     else    
-        sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "http_proxy"
+        sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "http_proxy" > /dev/null 2>/dev/null
         if [ $? -eq 0 ];then
             Results7a=`sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "http_proxy"`
             Note7=N/A
         else
             Results7a="http_proxy=NULL"
-            Note7="There is no Proxy settings for SSM agent"
+            Note7=$Proxy_doc
         fi
-        sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "https_proxy"
+        sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "https_proxy" > /dev/null 2>/dev/null
         if [ $? -eq 0 ];then
             Results7b=`sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "https_proxy"`
             Note7=N/A
         else
             Results7b="http_proxys=NULL"
-            Note7="There is no Proxy settings for SSM agent"
+            Note7=$Proxy_doc
         fi
-        sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "no_proxy"
+        sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "no_proxy" > /dev/null 2>/dev/null
         if [ $? -eq 0 ];then
             Results7c=`sudo xargs --null --max-args=1 < /proc/$(pidof amazon-ssm-agent)/environ | grep -e "no_proxy"`
+            Note7=N/A
         else
             Results7c="no_proxy=NULL"
+            Note7=$Proxy_doc
         fi
-        printf "$Test7|$Results7a,$Results7b,$Results7c|$Note7\n" >> /tmp/ssmscript-output.txt
+        printf "$Test7|$Results7a,$Results7b,$Results7c|$Note7\n" >> /tmp/ssmtoolkitscript-output.txt
     fi
 
 
     #-------Test8-------
 
     Test8="System Wide Proxy Settings"
-    env | grep -e "http_proxy"
+    env | grep -e "http_proxy" > /dev/null 2>/dev/null
     if [ $? -eq 0 ];then
      Results8a=`env | grep -e "http_proxy"`
      Note8=N/A
@@ -211,7 +211,7 @@ echo "
      Results8a="http_proxy=NULL"
      Note8="No System wide proxy settings detected"
     fi
-    env | grep -e "https_proxy"
+    env | grep -e "https_proxy" > /dev/null 2>/dev/null
     if [ $? -eq 0 ];then
      Results8b=`env | grep -e "https_proxy"`
      Note8=N/A
@@ -219,13 +219,13 @@ echo "
      Results8b="https_proxy=NULL"
      Note8="No System Wide proxy settings detected"
     fi
-    env | grep -e "no_proxy"
+    env | grep -e "no_proxy" > /dev/null 2>/dev/null
     if [ $? -eq 0 ];then
      Results8c=`env | grep -e "no_proxy"`
     else
      Results8c="no_proxy=NULL"
     fi
-    printf "$Test8|$Results8a,$Results8b,$Results8c|$Note8\n" >> /tmp/ssmscript-output.txt
+    printf "$Test8|$Results8a,$Results8b,$Results8c|$Note8\n" >> /tmp/ssmtoolkitscript-output.txt
       
 
 
@@ -240,7 +240,7 @@ echo "
         Results9=${nameservers[@]}
         Note9="DNS servers found in /etc/resolv.conf"
     fi    
-    printf "$Test9|$Results9|$Note9\n" >> /tmp/ssmscript-output.txt
+    printf "$Test9|$Results9|$Note9\n" >> /tmp/ssmtoolkitscript-output.txt
 
 
     #-------Test10------
@@ -254,28 +254,42 @@ echo "
      Results10="Null"
      Note10="Couldnt resolve $ssmend. Check if DNS is working."
     fi
-    printf "$Test10|$Results10|$Note10\n" >> /tmp/ssmscript-output.txt
-    cat /tmp/ssmscript-output.txt  | column -t -s "|"
-    rm -rf /tmp/ssmscript-output.txt
-    echo " "
+    printf "$Test10|$Results10|$Note10\n" >> /tmp/ssmtoolkitscript-output.txt
 
+    #-------Test11------
+
+    Test11="Checking for Hybrid Activation"
+    hybrid_doc="https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-managedinstances.html"
+    if [ -f /var/lib/amazon/ssm/Vault/Store/RegistrationKey ]
+    then
+     hybrid_instance_id=`cat /var/lib/amazon/ssm/Vault/Store/RegistrationKey | tr -d '{}' | cut '-d"' -f4`
+     Results11=$hybrid_instance_id
+     Note11="RegistrationKey file exist. The Instance is registered with Hybrid activation."
+    else
+     Results11="Null"
+     Note11="Instance not registered with Hybrid Activation. Ref: $hybrid_doc" 
+    fi
+    printf "$Test11|$Results11|$Note11\n" >> /tmp/ssmtoolkitscript-output.txt 
+    cat /tmp/ssmtoolkitscript-output.txt  | column -t -s "|"
+    rm -rf /tmp/ssmtoolkitscript-output.txt
+    echo " "
 }
 
 # Function to collect Logs
 
 CollectLogs()
 {
-read -t 4 -p "Press S for SSM agent Logs. Press R for Run Command Logs.Values are case sensitive: " REPLY
-echo " No Input Provided. The default value is ${REPLY:=S}."
+read -t 4 -p "Press S for SSM agent Logs. Press R for Run Command Logs. Values are case sensitive: " REPLY
+echo "No Input Provided. The default value is ${REPLY:=S}. Collecting SSM Agent logs.."
 
 if [ $REPLY == "S" ];then
- tar -cf AWS_SSMLOGS_$(date +%F).tar --absolute-names /etc/amazon/ssm/ /var/log/amazon/ssm/ /var/lib/amazon/ssm
+ tar -cf AWS_SSMLOGS_$(date +%F).tar --absolute-names /var/log/amazon/ssm/ --exclude='/var/log/amazon/ssm/download'
  echo "Logs stored in the current working directory : AWS_SSMLOGS_$(date +%F).tar"
 elif [ $REPLY == "R" ];then
  echo -n "Enter the Command execution ID: ";
  read;
  ExecID=$REPLY
- instance=`curl -s http://169.254.169.254/latest/meta-data/instance-id`
+ instance=`curl -s --connect-timeout 5 http://169.254.169.254/latest/meta-data/instance-id`
  #check logs exist
  if [ -e /var/lib/amazon/ssm/$instance/document/orchestration/$ExecID/ ];then
   tar -cf AWS_RunCommand_Logs_$ExecID.tar  --absolute-names /var/lib/amazon/ssm/$instance/document/orchestration/$ExecID/
@@ -288,14 +302,6 @@ else
 fi  
 }
 
-# Function to Enable/Disable Debug Logs
-
-DebugLogs()
-{
-echo " Not available with this version yet. Wait for the next release"  
-}
-
-
 # Help function
 
 GetHelp()
@@ -306,9 +312,8 @@ GetHelp()
    echo "Syntax: ssmagent-toolkit-Linux.sh [-h|r|l]"
    echo "options:"
    echo "-h     Print this Help."
-   echo "-r     Enter Region. Useful with On Premise Instances. This will generate the Diagnostic report."
+   echo "-r     Enter Region. Useful with On-Premise/Hybrid Instances."
    echo "-l     Collect Logs."
-   echo "-d     (Not available yet) Enable or disable Debugging Logs for SSM Agent."
    echo
 }
 
@@ -322,24 +327,45 @@ while getopts ":hr:ld" option; do
     GetHelp
     ;;
   r)
-    fetchregion=$OPTARG
-    runtests $fetchregion
-    ;;
+    regions_list="us-east-1 us-east-2 us-west-1 us-west-2 af-south-1 ap-east-1 ap-south-1 ap-northeast-3 ap-northeast-2 ap-northeast-1 ap-southeast-1 ap-southeast-2 ca-central-1 cn-north-1 cn-northwest-1 eu-central-1 eu-west-1 eu-west-2 eu-west-3 eu-south-1 eu-north-1 sa-east-1 us-gov-east-1 us-gov-west-1"
+    for item in $regions_list; do
+    if [ "$OPTARG" = "$item" ]
+    then
+     fetchregion=$OPTARG
+    fi
+    done
+        
+    if [ -z "$fetchregion" ]
+    then
+     echo "The region entered does not exist. Please provide correct AWS Region."
+     exit 1
+    else
+      runtests $fetchregion
+    fi
+    ;;    
+
   l)
     CollectLogs
     ;;
-  d)
-    DebugLogs
-    ;;  
   :)
-    echo "Missing option argument for -$OPTARG" >&2; 
+    echo "Error: Missing option argument for -$OPTARG" >&2; 
     exit 1
     ;;
+  
+  ?)
+    echo "Error: Invalid option was specified -$OPTARG. Use -h for help menu.";;
+  
   esac
 done
 
 if ((OPTIND == 1))
 then
-    fetchregion=$(curl -s  http://169.254.169.254/latest/dynamic/instance-identity/document | grep region | cut -d " " -f5 | tr -d '",')
+  curl -s --connect-timeout 5 http://169.254.169.254/  > /dev/null
+  exitcode=$?
+  if [ $exitcode -ne 0 ]; then
+   echo "Metadata URL is not accessible. Possible issue could be proxy. Alternatively, you can run this test with -r option to specify the region."
+  else
+    fetchregion=$(curl -s --connect-timeout 5 http://169.254.169.254/latest/dynamic/instance-identity/document | grep region | cut -d " " -f5 | tr -d '",')
     runtests $fetchregion
+  fi  
 fi
